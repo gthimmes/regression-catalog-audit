@@ -1,0 +1,55 @@
+version: 1
+
+repo:
+  # Optional. Defaults to cwd. Must be a git repo.
+  path: .
+  # Branch to analyze. Defaults to the current branch.
+  branch: main
+
+churn:
+  # Analysis window for "recent" changes.
+  windowDays: 90
+  # Commits touching more than this many files are treated as bulk
+  # changes (formatting, codemods) and weighted at 0.25.
+  bulkChangeFileThreshold: 50
+  # Paths always ignored for churn purposes.
+  ignore:
+    - "**/*.md"
+    - "**/package-lock.json"
+    - "**/*.snap"
+
+testiny:
+  # Testiny project name or ID containing the regression catalogs.
+  project: "Regression Catalogs"
+
+areas:
+  - name: payments
+    team: Valkyrie
+    paths:
+      - "apps/payments/**"
+      - "libs/payments/**"
+    testiny:
+      # Folder path within the Testiny project that holds this
+      # area's regression cases. Matched case-insensitively.
+      folder: "Payments"
+    # Optional: minimum mapped, non-stale test cases for this area
+    # to be considered healthy. Default: 1.
+    minCases: 10
+
+  - name: client-portal
+    team: Rosetta
+    paths:
+      - "apps/portal/**"
+      - "libs/portal/**"
+    testiny:
+      folder: "Client Portal"
+
+thresholds:
+  # An area is a COVERAGE GAP if churnScore >= gapChurnScore and
+  # healthy (non-stale) mapped cases < minCases.
+  gapChurnScore: 50
+  # A test case is STALE if its area accumulated >= staleChurnScore
+  # of churn since the case was last updated in Testiny.
+  staleChurnScore: 100
+  # Findings at or above these severities fail the audit (exit 1).
+  failOn: high   # one of: high | medium | low | never
