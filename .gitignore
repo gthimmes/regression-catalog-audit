@@ -3,4 +3,6 @@ dist/
 *.log
 audit-report.md
 audit-report.json
+audit-report.html
+data/testiny/
 .DS_Store

@@ -1,0 +1,30 @@
+{
+  "title": "Regression Catalog Snapshot",
+  "subtitle": "Live Testiny inventory — catalog health, not a churn audit",
+  "output": "audit-report.html",
+  "dataDir": "data/testiny",
+  "excludeProjects": [
+    "Synthetic Monitoring",
+    "Team Encore",
+    "Reporting",
+    "Cross Team",
+    "Productivity"
+  ],
+  "legacyFolderPatterns": ["historical", "deprecated", "zzz", "_old", "\\bold\\b"],
+  "legacyFindingThresholdPct": 30,
+  "projects": {
+    "6":  { "name": "Team Encore",          "key": "P-6" },
+    "7":  { "name": "Billing & AR",          "key": "P-7" },
+    "8":  { "name": "Client Collaboration",  "key": "P-8" },
+    "9":  { "name": "Engagement Letters",    "key": "P-9" },
+    "10": { "name": "Aiwyn Payments",        "key": "P-10" },
+    "11": { "name": "Foundations",           "key": "P-11" },
+    "12": { "name": "Project & Time",        "key": "P-12" },
+    "13": { "name": "Cross Team",            "key": "P-13" },
+    "14": { "name": "PayNow",                "key": "P-14" },
+    "15": { "name": "Reporting",             "key": "P-15" },
+    "16": { "name": "Synthetic Monitoring",  "key": "P-16" },
+    "17": { "name": "Team Integrations",     "key": "P-17" },
+    "18": { "name": "Productivity",          "key": "P-18" }
+  }
+}
