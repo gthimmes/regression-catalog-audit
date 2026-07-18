@@ -182,6 +182,14 @@ export class TestinyClient {
     });
     return rows.map(mapCase);
   }
+
+  /** All cases in a project regardless of folder (for whole-project areas). */
+  async listCasesInProject(projectId: number): Promise<TestinyCase[]> {
+    const rows = await this.findAll<RawCase>("testcase", {
+      project_id: projectId,
+    });
+    return rows.map(mapCase);
+  }
 }
 
 async function safeText(res: Response): Promise<string> {

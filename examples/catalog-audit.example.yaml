@@ -19,7 +19,8 @@ churn:
     - "**/*.snap"
 
 testiny:
-  # Testiny project name or ID containing the regression catalogs.
+  # Default Testiny project (name or ID) for areas that don't set their
+  # own. Optional if every area sets areas[].testiny.project.
   project: "Regression Catalogs"
 
 areas:
@@ -43,6 +44,16 @@ areas:
       - "libs/portal/**"
     testiny:
       folder: "Client Portal"
+
+  # One-project-per-team Testiny layouts: point the area at the team's
+  # own project. Omitting `folder` maps the area to the entire project.
+  - name: billing
+    team: Ledger
+    paths:
+      - "apps/billing/**"
+    testiny:
+      project: "Billing Team"
+      # folder omitted -> every case in the project counts for this area.
 
 thresholds:
   # An area is a COVERAGE GAP if churnScore >= gapChurnScore and

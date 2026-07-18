@@ -60,11 +60,16 @@ describe many teams/areas. See [`examples/catalog-audit.example.yaml`](examples/
 for a fully commented example. Path globs use `minimatch` semantics; invalid
 config prints every violation with its YAML path and exits `2`.
 
+Areas can share one Testiny project (top-level `testiny.project` + per-area
+`folder`) or each target their own project (`areas[].testiny.project`) for
+one-project-per-team Testiny layouts. Omitting an area's `folder` maps it to
+the entire project.
+
 ## Finding types
 
 | Type | Trigger | Severity |
 |---|---|---|
-| `missing-catalog` | Folder not found or empty | high |
+| `missing-catalog` | Project/folder not found, or empty | high |
 | `coverage-gap` | High churn + too few healthy cases | high |
 | `stale-catalog` | ≥50% of cases stale (high if ≥80%) | medium/high |
 | `stale-case` | An individual stale case | low |

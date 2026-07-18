@@ -13,7 +13,7 @@ produces a per-team/per-area audit report (Markdown + JSON + CI exit code). See
 
 | Type | Trigger | Default severity |
 |---|---|---|
-| `missing-catalog` | Area's Testiny folder not found, or contains zero cases | high |
+| `missing-catalog` | Area's Testiny project or folder not found, or contains zero cases | high |
 | `coverage-gap` | `churnScore >= gapChurnScore` and healthy cases `< minCases` | high |
 | `stale-catalog` | ≥ 50% of an area's cases are stale per `staleChurnScore` | medium (high if ≥ 80%) |
 | `stale-case` | Individual case stale (capped at 20 per area in Markdown) | low |

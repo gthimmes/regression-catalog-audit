@@ -4,7 +4,7 @@ import { currentBranch, getCommits } from "../churn/gitlog.js";
 import { loadConfig } from "../config/load.js";
 import { CredentialError, EXIT_OK } from "../errors.js";
 import { TestinyClient } from "../testiny/client.js";
-import { getCasesForFolder, resolveFolder, resolveProject } from "../testiny/resolve.js";
+import { resolveAreaCatalogs } from "../testiny/resolve.js";
 import { makeLogger } from "../output.js";
 
 /**
@@ -41,22 +41,27 @@ export async function runMap(opts: MapOptions): Promise<number> {
     unmappedNoiseFloor: UNMAPPED_NOISE_FLOOR,
   });
 
-  // Testiny: resolve folders and case counts for empty-area detection.
+  // Testiny: resolve catalogs and case counts for empty-area detection.
   const apiKey = process.env.TESTINY_API_KEY;
   if (!apiKey) throw new CredentialError("TESTINY_API_KEY is not set.");
   const testiny = new TestinyClient({ apiKey, baseUrl: process.env.TESTINY_BASE_URL });
-  const project = await resolveProject(testiny, config.testiny.project);
-  const folders = await testiny.listFolders(project.id);
+  const catalogs = await resolveAreaCatalogs(
+    testiny,
+    config.areas.map((a) => ({ name: a.name, project: a.testiny.project, folder: a.testiny.folder })),
+    { defaultProject: config.testiny.project, warn: (msg) => log.warn(msg) },
+  );
 
   const emptyAreas: string[] = [];
   for (const area of config.areas) {
-    const folder = resolveFolder(folders, area.testiny.folder);
-    if (!folder) {
-      emptyAreas.push(`${area.name} (folder "${area.testiny.folder}" not found)`);
-      continue;
+    const catalog = catalogs.byArea.get(area.name);
+    if (!catalog) continue;
+    if (!catalog.project) {
+      emptyAreas.push(`${area.name} (project "${catalog.projectRef}" not found)`);
+    } else if (!catalog.folderFound) {
+      emptyAreas.push(`${area.name} (folder "${catalog.folderLabel}" not found)`);
+    } else if (catalog.cases.length === 0) {
+      emptyAreas.push(`${area.name} ("${catalog.folderLabel}" empty)`);
     }
-    const cases = await getCasesForFolder(testiny, project.id, folders, folder);
-    if (cases.length === 0) emptyAreas.push(`${area.name} (folder "${folder.name}" empty)`);
   }
 
   const out: string[] = [];
@@ -93,7 +98,7 @@ export async function runMap(opts: MapOptions): Promise<number> {
       log.info("AI: proposing mappings for unmapped paths…");
       const yaml = await ai.suggestMappings(
         correlation.unmapped.map((u) => u.path),
-        folders.map((f) => f.name),
+        catalogs.folderNames,
       );
       if (yaml) {
         out.push("Add these entries to `catalog-audit.yaml` (review before applying):", "");

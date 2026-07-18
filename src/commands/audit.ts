@@ -12,7 +12,7 @@ import { CredentialError, EXIT_AUDIT_FAILED, EXIT_OK, RuntimeError } from "../er
 import { buildMarkdownReport } from "../report/markdown.js";
 import { buildJsonReport, renderJsonReport } from "../report/json.js";
 import { TestinyClient, type TestinyCase } from "../testiny/client.js";
-import { getCasesForFolder, resolveFolder, resolveProject } from "../testiny/resolve.js";
+import { resolveAreaCatalogs } from "../testiny/resolve.js";
 import type { AreaReport, Finding, RunInfo } from "../types.js";
 import { type Logger, makeLogger } from "../output.js";
 
@@ -66,24 +66,26 @@ export async function runAudit(opts: AuditOptions): Promise<number> {
 
   // --- Testiny ---
   const testiny = makeTestinyClient();
-  log.info(`Resolving Testiny project "${config.testiny.project}"…`);
-  const project = await resolveProject(testiny, config.testiny.project);
-  const folders = await testiny.listFolders(project.id);
+  log.info("Resolving Testiny catalogs…");
+  const catalogs = await resolveAreaCatalogs(
+    testiny,
+    areas.map((a) => ({ name: a.name, project: a.testiny.project, folder: a.testiny.folder })),
+    { defaultProject: config.testiny.project, warn: (msg) => log.warn(msg) },
+  );
 
   const casesByArea = new Map<string, TestinyCase[]>();
   const folderFoundByArea = new Map<string, boolean>();
   for (const area of areas) {
-    const folder = resolveFolder(folders, area.testiny.folder);
-    if (!folder) {
-      folderFoundByArea.set(area.name, false);
-      casesByArea.set(area.name, []);
-      log.warn(`Folder "${area.testiny.folder}" not found for area "${area.name}"`);
-      continue;
+    const catalog = catalogs.byArea.get(area.name);
+    if (!catalog) throw new RuntimeError(`Internal: missing catalog for area ${area.name}`);
+    folderFoundByArea.set(area.name, catalog.folderFound);
+    casesByArea.set(area.name, catalog.cases);
+    if (catalog.folderFound) {
+      log.info(
+        `Area "${area.name}": ${catalog.cases.length} case(s) in ` +
+          `${catalog.project?.name ?? catalog.projectRef} / ${catalog.folderLabel}`,
+      );
     }
-    folderFoundByArea.set(area.name, true);
-    const cases = await getCasesForFolder(testiny, project.id, folders, folder);
-    casesByArea.set(area.name, cases);
-    log.info(`Area "${area.name}": ${cases.length} case(s) in "${folder.name}"`);
   }
 
   // --- Orphan existence check (fs + tracked files) ---

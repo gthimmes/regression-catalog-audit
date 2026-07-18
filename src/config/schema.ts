@@ -12,9 +12,21 @@ export const areaSchema = z
     name: z.string().min(1),
     team: z.string().min(1),
     paths: z.array(z.string().min(1)).min(1),
-    testiny: z.object({
-      folder: z.string().min(1),
-    }),
+    testiny: z
+      .object({
+        /**
+         * Testiny project (name or id) holding this area's catalog. Overrides
+         * the top-level `testiny.project`; required when no top-level project
+         * is set. Supports one-project-per-team Testiny layouts.
+         */
+        project: z.string().min(1).optional(),
+        /**
+         * Folder path within the project. Omit to treat the entire project as
+         * the area's catalog (common when each team has its own project).
+         */
+        folder: z.string().min(1).optional(),
+      })
+      .strict(),
     /** Minimum mapped, non-stale cases for the area to be considered healthy. */
     minCases: z.number().int().positive().default(1),
   })
@@ -40,9 +52,11 @@ export const configSchema = z
       .default({}),
     testiny: z
       .object({
-        project: z.string().min(1),
+        /** Default project for areas that don't set their own `testiny.project`. */
+        project: z.string().min(1).optional(),
       })
-      .strict(),
+      .strict()
+      .default({}),
     areas: z.array(areaSchema).min(1),
     thresholds: z
       .object({
@@ -53,7 +67,22 @@ export const configSchema = z
       .strict()
       .default({}),
   })
-  .strict();
+  .strict()
+  .superRefine((config, ctx) => {
+    // Every area needs a project: its own testiny.project or the top-level default.
+    if (config.testiny.project) return;
+    config.areas.forEach((area, i) => {
+      if (!area.testiny.project) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["areas", i, "testiny", "project"],
+          message:
+            `Area "${area.name}" has no Testiny project: set areas[].testiny.project ` +
+            "or a top-level testiny.project default",
+        });
+      }
+    });
+  });
 
 export type Config = z.infer<typeof configSchema>;
 export type AreaConfig = z.infer<typeof areaSchema>;
