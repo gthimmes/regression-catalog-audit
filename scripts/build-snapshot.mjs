@@ -5,28 +5,41 @@
  * Reads per-project Testiny case dumps from the configured dataDir (one file per
  * project, named p<projectId>.json, each holding the raw {testCases:[...]} shape
  * the Testiny "list test cases" call returns) and renders a self-contained HTML
- * report. All aggregation, exclusion, and layout logic lives here so the report
- * regenerates identically every run — the only non-scriptable step is the data
- * pull, which the connector does interactively (see SNAPSHOT.md).
+ * report. All aggregation, exclusion, and layout logic is deterministic so the
+ * report regenerates identically every run — the only non-scriptable step is
+ * the data pull, which the connector does interactively (see SNAPSHOT.md).
+ *
+ * Each run also upserts a per-project summary into the history file
+ * (data/history.json by default) and renders deltas vs the previous run.
  *
  * Usage:  node scripts/build-snapshot.mjs [path/to/snapshot.config.json]
+ *         SNAPSHOT_DATE=YYYY-MM-DD pins the run date (header + history key).
  */
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { join, dirname, resolve, isAbsolute } from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  computeDeltas,
+  computeTotals,
+  fmtDelta,
+  makeHistoryEntry,
+  makeLegacyMatcher,
+  previousEntry,
+  summarizeProject,
+  upsertHistory,
+} from "./snapshot-lib.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const configPath = process.argv[2] ? resolve(process.argv[2]) : join(ROOT, "snapshot.config.json");
 const cfg = JSON.parse(readFileSync(configPath, "utf8"));
-const dataDir = isAbsolute(cfg.dataDir) ? cfg.dataDir : join(ROOT, cfg.dataDir);
-const legacyRes = cfg.legacyFolderPatterns.map((p) => new RegExp(p, "i"));
+const abs = (p) => (isAbsolute(p) ? p : join(ROOT, p));
+const dataDir = abs(cfg.dataDir);
+const isLegacy = makeLegacyMatcher(cfg.legacyFolderPatterns);
 const excluded = new Set(cfg.excludeProjects);
 
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const num = (n) => n.toLocaleString("en-US");
 const pct = (a, b) => (b === 0 ? 0 : Math.round((a / b) * 100));
-const topFolder = (f) => (f ? String(f).split(">")[0].trim() : "(none)");
-const isLegacy = (folder) => legacyRes.some((re) => re.test(folder));
 
 // ---- Load + aggregate per project ------------------------------------------
 const projects = [];
@@ -38,21 +51,13 @@ for (const [id, meta] of Object.entries(cfg.projects)) {
     continue;
   }
   const cases = JSON.parse(readFileSync(file, "utf8")).testCases ?? [];
-  const folders = {};
-  let legacy = 0, automated = 0, untyped = 0, other = 0;
-  for (const c of cases) {
-    const tf = topFolder(c.folder);
-    folders[tf] = (folders[tf] || 0) + 1;
-    if (isLegacy(tf)) legacy++;
-    if (c.automationstatus === "Automated") automated++;
-    if (c.testcase_type == null) untyped++;
-    else if (c.testcase_type === "OTHER") other++;
-  }
-  const notable = Object.entries(folders).sort((a, b) => b[1] - a[1]).slice(0, 2);
+  const summary = summarizeProject(cases, isLegacy);
   projects.push({
-    id, name: meta.name, key: meta.key, total: cases.length,
-    legacy, automated, untyped, other, folders, notable,
-    autoPct: pct(automated, cases.length),
+    id,
+    name: meta.name,
+    key: meta.key,
+    ...summary,
+    autoPct: pct(summary.automated, summary.total),
   });
 }
 projects.sort((a, b) => b.total - a.total);
@@ -63,9 +68,7 @@ if (projects.length === 0) {
 }
 
 // ---- Roll-ups ---------------------------------------------------------------
-const totalCases = projects.reduce((s, p) => s + p.total, 0);
-const totalAuto = projects.reduce((s, p) => s + p.automated, 0);
-const totalLegacy = projects.reduce((s, p) => s + p.legacy, 0);
+const totals = computeTotals(projects);
 const zeroAuto = projects.filter((p) => p.total > 0 && p.automated === 0);
 
 const legacyLeaders = projects
@@ -78,22 +81,43 @@ const untypedLeaders = projects
   .slice(0, 2)
   .filter((p) => p.tagGap > 0);
 
-// ---- Render -----------------------------------------------------------------
+// ---- History + deltas -------------------------------------------------------
 const genDate = process.env.SNAPSHOT_DATE || new Date().toISOString().slice(0, 10);
+const historyPath = abs(cfg.historyFile ?? "data/history.json");
+const history = existsSync(historyPath) ? JSON.parse(readFileSync(historyPath, "utf8")) : [];
+const prev = previousEntry(history, genDate);
+const deltas = computeDeltas(projects, prev);
+const nextHistory = upsertHistory(history, makeHistoryEntry(genDate, projects));
+writeFileSync(historyPath, `${JSON.stringify(nextHistory, null, 1)}\n`);
 
+// ---- Render -----------------------------------------------------------------
 const barClass = (p) => (p.autoPct === 0 ? "bar zero" : p.autoPct < 40 ? "bar lowfill" : "bar");
+
+const statDelta = (n) =>
+  deltas ? `<div class="d">${esc(fmtDelta(n))} since ${esc(deltas.since)}</div>` : "";
+
+const rowDelta = (p) => {
+  if (!deltas) return "";
+  const d = deltas.perProject[p.id];
+  if (!d) return "";
+  if (d.isNew) return `<td class="num delta">new</td>`;
+  return `<td class="num delta">${esc(fmtDelta(d.total))}</td>`;
+};
 
 const rows = projects.map((p) => {
   const notable = p.notable.map(([name, n]) =>
     `${isLegacy(name) ? "<b>" : ""}${esc(name)} (${num(n)})${isLegacy(name) ? "</b>" : ""}`).join(", ");
   return `        <tr><td>${esc(p.name)}</td><td>${esc(p.key)}</td><td class="num">${num(p.total)}</td>` +
+    rowDelta(p) +
     `<td class="num${p.legacy > 0 ? " legacy-hi" : ""}">${num(p.legacy)}</td>` +
     `<td><span class="${barClass(p)}"><span style="width:${p.autoPct}%"></span></span>` +
     `<span class="pct">${p.autoPct}%</span></td><td>${notable}</td></tr>`;
 }).join("\n");
 
+const deltaHeader = deltas ? `<th class="num">Δ</th>` : "";
+
 const legacyItems = legacyLeaders.map((p) => {
-  const [name, n] = p.notable.find(([nm]) => isLegacy(nm)) || p.notable[0];
+  const [name] = p.notable.find(([nm]) => isLegacy(nm)) || p.notable[0];
   return `      <li><b>${esc(p.name)}:</b> ${num(p.legacy)} of ${num(p.total)} ` +
     `(<b>${pct(p.legacy, p.total)}%</b>) parked in <code>${esc(name)}</code></li>`;
 }).join("\n");
@@ -145,6 +169,7 @@ const html = `<!doctype html>
   .stat { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 16px; }
   .stat .n { font-size: 26px; font-weight: 700; letter-spacing: -0.02em; }
   .stat .l { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .stat .d { font-size: 11px; color: var(--muted); margin-top: 6px; font-variant-numeric: tabular-nums; }
   h2 { font-size: 17px; margin: 40px 0 14px; padding-bottom: 6px; border-bottom: 1px solid var(--line); }
   .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
   .tablescroll { overflow-x: auto; }
@@ -155,6 +180,7 @@ const html = `<!doctype html>
   td { border-bottom: 1px solid var(--track); }
   tr:last-child td { border-bottom: none; }
   td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  td.delta { color: var(--muted); font-size: 12px; }
   .legacy-hi { color: var(--med); font-weight: 600; }
   .bar { position: relative; width: 120px; height: 16px; background: var(--track); border-radius: 4px;
     overflow: hidden; display: inline-block; vertical-align: middle; }
@@ -185,7 +211,9 @@ const html = `<!doctype html>
     <div class="meta">
       <span><b>Source:</b> Testiny (live)</span>
       <span><b>Generated:</b> ${esc(genDate)}</span>
-      <span><b>Scope:</b> ${projects.length} in-scope team projects</span>
+      <span><b>Scope:</b> ${projects.length} in-scope team projects</span>${
+        deltas ? `\n      <span><b>Compared to:</b> ${esc(deltas.since)}</span>` : ""
+      }
     </div>
   </header>
 
@@ -197,9 +225,9 @@ const html = `<!doctype html>
   </div>
 
   <div class="cards">
-    <div class="stat"><div class="n">${num(totalCases)}</div><div class="l">Test cases (${projects.length} projects)</div></div>
-    <div class="stat"><div class="n">${num(totalAuto)}</div><div class="l">Automated (${pct(totalAuto, totalCases)}%)</div></div>
-    <div class="stat"><div class="n">${num(totalLegacy)}</div><div class="l">Legacy / parked (${pct(totalLegacy, totalCases)}%)</div></div>
+    <div class="stat"><div class="n">${num(totals.total)}</div><div class="l">Test cases (${projects.length} projects)</div>${statDelta(deltas?.totals.total ?? 0)}</div>
+    <div class="stat"><div class="n">${num(totals.automated)}</div><div class="l">Automated (${pct(totals.automated, totals.total)}%)</div>${statDelta(deltas?.totals.automated ?? 0)}</div>
+    <div class="stat"><div class="n">${num(totals.legacy)}</div><div class="l">Legacy / parked (${pct(totals.legacy, totals.total)}%)</div>${statDelta(deltas?.totals.legacy ?? 0)}</div>
     <div class="stat"><div class="n">${zeroAuto.length}</div><div class="l">Projects at 0% automation</div></div>
   </div>
 
@@ -207,7 +235,7 @@ const html = `<!doctype html>
   <div class="card tablescroll">
     <table>
       <thead>
-        <tr><th>Project</th><th>Key</th><th class="num">Cases</th>
+        <tr><th>Project</th><th>Key</th><th class="num">Cases</th>${deltaHeader}
           <th class="num">Legacy&nbsp;(parked)</th><th>Automation</th><th>Notable folders</th></tr>
       </thead>
       <tbody>
@@ -216,7 +244,9 @@ ${rows}
     </table>
   </div>
   <div class="legend">
-    <div><b>Cases</b> — all test cases currently in the project, across every folder.</div>
+    <div><b>Cases</b> — all test cases currently in the project, across every folder.${
+      deltas ? " <b>Δ</b> — change in case count since the previous snapshot." : ""
+    }</div>
     <div><b>Legacy (parked)</b> — cases in folders explicitly named historical / old / deprecated.
       A staleness proxy: the API exposes no last-modified date, so this counts what the team has
       itself flagged as archived. High values mean the live total overstates active coverage.</div>
@@ -227,7 +257,7 @@ ${rows}
 
   <div class="finding">
     <h3><span class="sev med">Medium</span> Large legacy / parked buckets (staleness proxy)</h3>
-    <p>~<b>${num(totalLegacy)} cases (${pct(totalLegacy, totalCases)}% of in-scope)</b> sit in folders
+    <p>~<b>${num(totals.legacy)} cases (${pct(totals.legacy, totals.total)}% of in-scope)</b> sit in folders
        explicitly named historical, old, or deprecated. Where the archive dwarfs the active catalog:</p>
     <ul>
 ${legacyItems}
@@ -256,8 +286,16 @@ ${legacyItems}
 </html>
 `;
 
-const outPath = isAbsolute(cfg.output) ? cfg.output : join(ROOT, cfg.output);
+const outPath = abs(cfg.output);
 writeFileSync(outPath, html);
 console.log(`Rendered ${outPath}`);
-console.log(`  ${projects.length} projects, ${num(totalCases)} cases, ` +
-  `${num(totalAuto)} automated (${pct(totalAuto, totalCases)}%), ${num(totalLegacy)} legacy (${pct(totalLegacy, totalCases)}%)`);
+console.log(`  ${projects.length} projects, ${num(totals.total)} cases, ` +
+  `${num(totals.automated)} automated (${pct(totals.automated, totals.total)}%), ` +
+  `${num(totals.legacy)} legacy (${pct(totals.legacy, totals.total)}%)`);
+if (deltas) {
+  console.log(`  vs ${deltas.since}: cases ${fmtDelta(deltas.totals.total)}, ` +
+    `automated ${fmtDelta(deltas.totals.automated)}, legacy ${fmtDelta(deltas.totals.legacy)}`);
+} else {
+  console.log("  (first recorded run — no deltas)");
+}
+console.log(`  history: ${historyPath} (${nextHistory.length} run(s))`);

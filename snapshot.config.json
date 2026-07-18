@@ -3,6 +3,7 @@
   "subtitle": "Live Testiny inventory — catalog health, not a churn audit",
   "output": "audit-report.html",
   "dataDir": "data/testiny",
+  "historyFile": "data/history.json",
   "excludeProjects": [
     "Synthetic Monitoring",
     "Team Encore",

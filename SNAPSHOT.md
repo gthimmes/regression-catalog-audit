@@ -36,6 +36,11 @@ npm run snapshot
 Writes `audit-report.html` and prints a one-line summary. Open the file in any
 browser (it is fully self-contained — no network, no Claude).
 
+Each run also records a per-project summary in `data/history.json` (committed,
+one entry per date — rerunning a date replaces its entry) and the report shows
+deltas vs the previous run: change chips on the summary cards and a Δ column
+in the projects table.
+
 Pin the header date for a reproducible diff:
 
 ```bash

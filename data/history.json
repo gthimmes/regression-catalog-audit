@@ -1,0 +1,60 @@
+[
+ {
+  "date": "2026-07-15",
+  "totals": {
+   "total": 3541,
+   "automated": 1215,
+   "legacy": 1126
+  },
+  "projects": {
+   "7": {
+    "name": "Billing & AR",
+    "total": 473,
+    "automated": 46,
+    "legacy": 388
+   },
+   "8": {
+    "name": "Client Collaboration",
+    "total": 661,
+    "automated": 75,
+    "legacy": 213
+   },
+   "9": {
+    "name": "Engagement Letters",
+    "total": 627,
+    "automated": 41,
+    "legacy": 525
+   },
+   "10": {
+    "name": "Aiwyn Payments",
+    "total": 427,
+    "automated": 237,
+    "legacy": 0
+   },
+   "11": {
+    "name": "Foundations",
+    "total": 222,
+    "automated": 0,
+    "legacy": 0
+   },
+   "12": {
+    "name": "Project & Time",
+    "total": 234,
+    "automated": 0,
+    "legacy": 0
+   },
+   "14": {
+    "name": "PayNow",
+    "total": 821,
+    "automated": 810,
+    "legacy": 0
+   },
+   "17": {
+    "name": "Team Integrations",
+    "total": 76,
+    "automated": 6,
+    "legacy": 0
+   }
+  }
+ }
+]

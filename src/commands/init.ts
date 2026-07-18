@@ -65,7 +65,8 @@ async function prompt(question: string, fallback: string): Promise<string> {
   }
 }
 
-function starterYaml(project: string): string {
+/** Exported for tests: the starter template must always validate. */
+export function starterYaml(project: string): string {
   return `version: 1
 
 repo:
@@ -87,11 +88,12 @@ churn:
     - "**/*.snap"
 
 testiny:
-  # Testiny project name or ID that holds the regression catalogs.
+  # Default Testiny project (name or ID) for areas that don't set their own.
+  # Optional if every area sets its own testiny.project below.
   project: ${JSON.stringify(project)}
 
 areas:
-  # Map each ownership area's code paths to its Testiny catalog folder.
+  # Map each ownership area's code paths to its Testiny catalog.
   - name: example-area
     team: ExampleTeam
     paths:
@@ -102,6 +104,15 @@ areas:
       folder: "Example"
     # Optional: minimum healthy (mapped, non-stale) cases for this area. Default 1.
     # minCases: 10
+
+  # One-project-per-team Testiny layouts: give the area its own project.
+  # Omitting \`folder\` maps the area to the entire project.
+  # - name: example-team-area
+  #   team: ExampleTeam2
+  #   paths:
+  #     - "apps/example2/**"
+  #   testiny:
+  #     project: "Example Team Project"
 
 thresholds:
   # An area is a COVERAGE GAP if churnScore >= gapChurnScore and healthy

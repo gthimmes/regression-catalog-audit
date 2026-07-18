@@ -1,0 +1,108 @@
+# catalog-audit.draft.yaml — real-team draft (2026-07-18)
+#
+# The 8 in-scope Testiny team projects as audit areas, using per-area
+# `testiny.project` (one-project-per-team layout). To activate:
+#   1. Copy this into the PRODUCT repo (the one whose code these teams ship)
+#      as catalog-audit.yaml — churn is computed from that repo's git history,
+#      not from this tool repo.
+#   2. Replace every `paths` TODO with the real code globs for that team.
+#   3. Export TESTINY_API_KEY and run `catalog-audit areas` to sanity-check,
+#      then `catalog-audit audit`.
+#
+# Folder choices below mirror what the 2026-07-15 snapshot found in each
+# project. Where a project parks most cases in historical folders, the area
+# points at the active folder so archives don't count as coverage; otherwise
+# `folder` is omitted and the whole project counts.
+
+version: 1
+
+repo:
+  path: .           # the product repo root
+  # branch: main
+
+churn:
+  windowDays: 90
+  bulkChangeFileThreshold: 50
+  ignore:
+    - "**/*.md"
+    - "**/package-lock.json"
+    - "**/*.snap"
+
+# No top-level testiny.project: every area names its own team project.
+testiny: {}
+
+areas:
+  - name: billing-ar
+    team: Billing & AR
+    paths:
+      - "TODO/billing/**"
+    testiny:
+      project: "Billing & AR"
+      # Active catalog; "0. Historical Test Cases" (388 of 473) excluded.
+      folder: "Regression"
+    minCases: 10
+
+  - name: client-collaboration
+    team: Client Collaboration
+    paths:
+      - "TODO/client-collaboration/**"
+    testiny:
+      project: "Client Collaboration"
+      # Whole project for now — most cases sit in ROOT; revisit once
+      # ZZZ_OLD_CXP (211 cases) is archived out.
+    minCases: 10
+
+  - name: engagement-letters
+    team: Engagement Letters
+    paths:
+      - "TODO/engagement-letters/**"
+    testiny:
+      project: "Engagement Letters"
+      # Active catalog; "Historical Test Cases" (525 of 627) excluded.
+      folder: "Test Cases v2"
+    minCases: 10
+
+  - name: aiwyn-payments
+    team: Aiwyn Payments
+    paths:
+      - "TODO/payments/**"
+    testiny:
+      project: "Aiwyn Payments"
+    minCases: 10
+
+  - name: foundations
+    team: Foundations
+    paths:
+      - "TODO/foundations/**"
+    testiny:
+      project: "Foundations"
+    minCases: 10
+
+  - name: project-time
+    team: Project & Time
+    paths:
+      - "TODO/project-time/**"
+    testiny:
+      project: "Project & Time"
+    minCases: 10
+
+  - name: paynow
+    team: PayNow
+    paths:
+      - "TODO/paynow/**"
+    testiny:
+      project: "PayNow"
+    minCases: 10
+
+  - name: team-integrations
+    team: Team Integrations
+    paths:
+      - "TODO/integrations/**"
+    testiny:
+      project: "Team Integrations"
+    minCases: 5
+
+thresholds:
+  gapChurnScore: 50
+  staleChurnScore: 100
+  failOn: high
