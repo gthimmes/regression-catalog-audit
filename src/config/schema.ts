@@ -49,14 +49,14 @@ export const configSchema = z
         ignore: z.array(z.string().min(1)).default([]),
       })
       .strict()
-      .default({}),
+      .prefault({}),
     testiny: z
       .object({
         /** Default project for areas that don't set their own `testiny.project`. */
         project: z.string().min(1).optional(),
       })
       .strict()
-      .default({}),
+      .prefault({}),
     areas: z.array(areaSchema).min(1),
     thresholds: z
       .object({
@@ -65,7 +65,7 @@ export const configSchema = z
         failOn: z.enum(["high", "medium", "low", "never"]).default("high"),
       })
       .strict()
-      .default({}),
+      .prefault({}),
   })
   .strict()
   .superRefine((config, ctx) => {
